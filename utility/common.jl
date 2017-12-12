@@ -1,13 +1,16 @@
 using SpecialFunctions
 using AutoGrad
-import AutoGrad: Broadcasted
-# import Knet:broadcast_func
 using Knet
+import AutoGrad: Broadcasted, getval, Rec
 
 const F = Float32
+
 H(x) = erfc(x / F(√2)) / 2
 GH(x) = 2 / erfcx(x/F(√2)) / F(√(2π))
-
+binreg(w) = mean((1 .- w) .* (1 .+ w))
+percentage(x) = round(x*100, 2)
+setlr!(opt, lr) = for o in opt; o.lr =lr; end
+hardtanh(x) = relu(2 - relu(1-x)) - 1
 
 function broadcast_func(f)
     bf = Symbol("broadcast#", lstrip(string(f), '.'))
@@ -34,8 +37,6 @@ blogH = broadcast_func(logH)
 @primitive logH(x),dy,y  (@. -dy*GH(x))
 @eval @primitive $blogH(x),dy,y  (@. -dy*GH(x))
 
-hardtanh(x) = relu(2 - relu(1-x)) - 1
-
 fSign(x) = sign(x)
 fSign_back(x) = (1+sign(1-abs(x))) / 2
 bfSign = broadcast_func(fSign)
@@ -51,13 +52,11 @@ bfTheta = broadcast_func(fTheta)
 @eval @primitive $bfTheta(x),dy,y  (@. dy*fTheta_back(x))
 
 function clip(w, ϵ = 0)
-    ϵ1 = F(1 - ϵ)
+		ϵ1 = F(1 - ϵ)
     w = relu.(w .+ ϵ1) .- ϵ1
     w = -relu.( ϵ1 .- w) .+ ϵ1
     return w
 end
-
-binreg(w) = mean((1 .- w) .* (1 .+ w))
 
 function loadmnist(M=60_000, Mtst=10_000; fashion=false, preprocess=false)
     if fashion
@@ -100,20 +99,6 @@ function loadcifar10(M=50000, Mtst=10000; preprocess=false)
     return xtrn[:,:,:,1:M], ytrn[1:M], xtst[:,:,:,1:Mtst], ytst[1:Mtst]
 end
 
-setlr!(opt, lr) = for o in opt; o.lr =lr; end
-
-# function findindices{T<:Integer}(y, a::Vector{T})
-#     n = length(a)
-#     indices = Vector{Int}(n)
-#     y1 = size(y,1)
-#     y2 = div(length(y),y1)
-#     if n != y2; throw(DimensionMismatch()); end
-#     @inbounds for j=1:n
-#         indices[j] = (j-1)*y1 + a[j]
-#     end
-#     return indices
-# end
-
 function onehot(a::Vector, K)
     y = zeros(Int, K, length(a))
     @inbounds for i=1:length(a)
@@ -129,8 +114,6 @@ function onehot!(y, a::Vector)
     end
     y
 end
-
-percentage(x) = round(x*100, 2)
 
 mutable struct BatchMoments
     μ
@@ -150,8 +133,6 @@ function Base.push!(b::BatchMoments, μ, σ)
 end
 
 getmoments(bm::BatchMoments) = bm.μ != nothing ? (bm.μ, bm.σ) : (0, 1)
-
-import AutoGrad: getval, Rec
 
 # Batch Normalization Layer
 # works both for convolutional and fully connected layers
