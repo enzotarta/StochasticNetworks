@@ -2,7 +2,7 @@ using MLDatasets
 using Knet
 using SpecialFunctions
 const F = Float32
-include("../common.jl")
+include("../../utility/common.jl")
 
 function predict(w, x; clip=false, pdrop=0.5, input_do = 0.0)
     x = mat(x)

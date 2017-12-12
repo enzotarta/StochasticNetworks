@@ -2,7 +2,7 @@ using MLDatasets
 using Knet
 
 const F = Float32
-include("../common.jl")
+include("../../utility/common.jl")
 
 
 function predict(w, x, bmom; pdrop=0.5)

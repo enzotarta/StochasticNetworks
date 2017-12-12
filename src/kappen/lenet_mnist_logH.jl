@@ -2,12 +2,13 @@ using MLDatasets
 using Knet
 
 const F = Float32
-include("../common.jl")
+include("../../utility/common.jl")
 
 
-function predict(w, x, bmom; clip=false, pdrop=0.5)
+function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0)
     i = 1
     x = reshape(x, 28, 28, 1, length(x)÷(28*28))
+    x = dropout(x, input_do; training= w[1] isa Rec ? true : false)
     if clip 
         x = conv4(sign.(w[i]), x; padding=0) 
         x = pool(x, mode=1)

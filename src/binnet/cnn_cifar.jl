@@ -2,7 +2,7 @@ using Knet
 using MLDatasets
 
 const F = Float32
-include("../common.jl")
+include("../../utility/common.jl")
 
 # all cnn are "same" 3x3
 NET = [128,128, 'M', 256, 256, 'M',
@@ -76,7 +76,7 @@ function main(xtrn, ytrn, xtst, ytst;
         epochs = 200,
         infotime = 1,  # report every `infotime` epochs
         atype = gpu() >= 0 ? KnetArray{F} : Array{F},
-		reportname = "",
+				reportname = "",
         pdrop = 0.5,  #dropout probability
         verb = 2
         )
@@ -127,12 +127,8 @@ function main(xtrn, ytrn, xtst, ytst;
         for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=true, xtype=atype)
             bw = binarize(w)
             dw = grad(loss)(bw, x, y, bmom; pdrop=pdrop)
-            #former = deepcopy(w)
             update!(w, dw, opt)
             for i=1:3:length(w)
-              #H_bin = 1.0#sqrt(1.5 / (length(w[i])÷size(w[i])[end]*batchsize + length(w[i])))
-              #lr_scale = 1/H_bin
-              #w[i] = former[i] + lr_scale*(w[i] - former[i])
               w[i] = clip(w[i])
             end
         end

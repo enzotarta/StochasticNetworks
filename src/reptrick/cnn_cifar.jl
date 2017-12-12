@@ -2,7 +2,7 @@ using Knet
 using MLDatasets
 
 const F = Float32
-include("../common.jl")
+include("../../utility/common.jl")
 
 # all cnn are "same" 3x3  
 NET = [128,128, 'M', 256, 256, 'M',
