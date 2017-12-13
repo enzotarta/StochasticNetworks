@@ -15,7 +15,7 @@ function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0, out_bn = fal
         x =  sign.(w[end-2])*x
         if out_bn
         	x =  batchnorm(w[end-1:end], x, bmom)
-        else
+        end
         return x
     else
         for i=1:2:length(w)-3
@@ -64,8 +64,6 @@ function build_net(; atype=Array{F})
     ]
     return map(a->convert(atype,a), w)
 end
-
-loss(w, x, y, bmom; pdrop=0.5, out_bn = false) = nll(predict(w, x, bmom; pdrop=pdrop, out_bn = out_bn), y)
 
 function main(xtrn, ytrn, xtst, ytst;
         seed = -1,

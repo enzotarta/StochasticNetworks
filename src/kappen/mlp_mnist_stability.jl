@@ -31,8 +31,8 @@ function predict(w, x; clip=false, pdrop=0.5, input_do = 0.0)
     end
 end
 
-function loss(w, x, y, bmom; clip = false, pdrop=0.0, input_do = 0.0, ρ=0.5, ϵ=0.000001)
-  ŷ = predict(w, x, bmom; clip=clip, pdrop=pdrop, input_do = input_do)
+function loss(w, x, y; clip = false, pdrop=0.0, input_do = 0.0, ρ=0.5, ϵ=0.000001)
+  ŷ = predict(w, x; clip=clip, pdrop=pdrop, input_do = input_do)
   ŷ= H.(-ŷ)
   nm = onehot!(similar(ŷ), y)
   ŷ = ŷ ./(1.0 + ϵ - ŷ)
