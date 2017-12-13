@@ -62,8 +62,8 @@ end
 
 losslogH(y) = -sum(logH.(-y)) / size(y, 2)
 
-function loss(w, x, y, bmom; pdrop=0.5)
-    ŷ = predict(w, x, bmom; pdrop=pdrop)
+function loss(w, x, y, bmom; pdrop=0.5, input_do = 0.0)
+    ŷ = predict(w, x, bmom; pdrop=pdrop, input_do = input_do)
     y = onehot!(similar(ŷ), y)
     return losslogH((2 .* y .- 1) .* ŷ)
 end
@@ -96,7 +96,8 @@ function main(xtrn, ytrn, xtst, ytst;
         reportname = "",
         atype = gpu() >= 0 ? KnetArray{F} : Array{F},
         verb = 2,
-        pdrop = 0.5
+        pdrop = 0.5,
+        input_do = 0.0
         )
 
     info("using ", atype)
@@ -144,9 +145,9 @@ function main(xtrn, ytrn, xtst, ytst;
     @time for epoch=1:epochs
         # epoch == 10 && setlr!(opt, lr/=10)
         for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=true, xtype=atype)
-            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop)
+            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do)
             for i=1:2:length(w)-2
-                # dw[i] = (1 - w[i] .* w[i]) .* dw[i]
+                dw[i] = (1 - w[i] .* w[i]) .* dw[i]
             end
             update!(w, dw, opt)
             for i=1:2:length(w)-2
