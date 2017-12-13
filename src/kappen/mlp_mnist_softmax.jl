@@ -4,9 +4,10 @@ using Knet
 const F = Float32
 include("../../utility/common.jl")
 
-function predict(w, x, bmom; clip=false, pdrop=0.5, out_bn = false)
+function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0, out_bn = false)
     x = mat(x)
     scale = w[1] isa Rec ? 1-pdrop : 1
+    x = dropout(x, input_do; training= w[1] isa Rec ? true : false)
     if clip
         for i=1:2:length(w)-3
             x = sign.(sign.(w[i])*x .+ w[i+1])
@@ -36,7 +37,7 @@ function predict(w, x, bmom; clip=false, pdrop=0.5, out_bn = false)
     end
 end
 
-loss(w, x, y, bmom; clip=false, pdrop=0.5, out_bn=false) = nll(predict(w, x, bmom; clip=clip, pdrop=0.5, out_bn=out_bn), y) 
+loss(w, x, y, bmom; clip=false, pdrop=0.5, input_do = 0.0, out_bn=false) = nll(predict(w, x, bmom; clip=clip, pdrop=pdrop, input_do = input_do, out_bn=out_bn), y) 
 
 # losslogH(y) = -sum(logH.(-y)) / size(y, 2)
 
@@ -76,7 +77,8 @@ function main(xtrn, ytrn, xtst, ytst;
         infotime = 1,  # report every `infotime` epochs
         atype = gpu() >= 0 ? KnetArray{F} : Array{F},
         verb = 2,
-        pdrop = 0.5
+        pdrop = 0.5,
+        input_do = 0.0
         )
 
     info("using ", atype)
@@ -122,7 +124,7 @@ function main(xtrn, ytrn, xtst, ytst;
     report(0); tic()
     @time for epoch=1:epochs
         for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=true, xtype=atype)
-            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, out_bn = out_bn)
+            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do, out_bn = out_bn)
             for i=1:2:length(w)-2
                 dw[i] = (1 - w[i] .* w[i]) .* dw[i]
             end
