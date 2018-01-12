@@ -60,6 +60,7 @@ function main(xtrn, ytrn, xtst, ytst;
         seed = -1,
         batchsize = 200,
         lr = 1e-3,
+        lr_decay = 1.0,
         epochs = 200,
         reportname = "",
         infotime = 1,  # report every `infotime` epochs
@@ -91,7 +92,8 @@ function main(xtrn, ytrn, xtst, ytst;
                 :trn, accuracy(w, dtrn, (w,x)->predict(w,x,bmom)) |> percentage,
                 :trn_clip, acctrn  |> percentage,
                 :tst, accuracy(w, dtst, (w,x)->predict(w,x,bmom)) |> percentage,
-                :tst_clip, acctst  |> percentage
+                :tst_clip, acctst  |> percentage,
+                :lr, lr
             ))
 						if reportname != ""
                 f = open(reportname, "a")
@@ -125,7 +127,8 @@ function main(xtrn, ytrn, xtst, ytst;
             end
         end
         (epoch % infotime == 0) && (report(epoch); toc(); tic())
-        # acctrn == 100 && break
+        lr*= lr_decay
+        opt = [Adam(lr=lr) for _=1:length(w)]
     end; toq()
     println("# FINAL RESULT acccuracy: train=$acctrn test=$acctst")
     return w

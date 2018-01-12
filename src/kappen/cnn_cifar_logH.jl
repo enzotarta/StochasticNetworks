@@ -4,64 +4,45 @@ using Knet
 const F = Float32
 include("../../utility/common.jl")
 
+# all cnn are "same" 3x3  
+NET = [128,128, 'M', 256, 256, 'M',
+  512, 512,  'M', 'F', [1024]]
+
 
 function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0)
     i = 1
-    x = reshape(x, 28, 28, 1, length(x)÷(28*28))
-    x = dropout(x, input_do; training= w[1] isa Rec ? true : false)
-    if clip 
-        x = conv4(sign.(w[i]), x; padding=0) 
-        x = pool(x, mode=1)
-        x = sign.(x .+ w[i+1])
-        i += 2    
-    
-        x = conv4(sign.(w[i]), x; padding=0) 
-        x = pool(x, mode=1)
-        x = sign.(x .+ w[i+1])
-        i += 2    
-    
-        x = mat(x)
-        
-        x = sign.(w[i]) * x .+ w[i+1]
-        x = sign.(x)
-        i += 2 
-
-        return sign.(w[i]) * x .+ w[i+2]
-    else 
-        scale = w[1] isa Rec ? 1-pdrop : 1
-     #warn(sum(x[1]))
-        μ = conv4(w[1], x; padding = 0) .+ w[2]
-        σ² = conv4(1 .- w[1] .* w[1], (x .* x).+ 0.00000001; padding = 0)
-        μ = pool(μ, mode=1)
-        σ² = pool(σ², mode=1)
-        x = @.  2H(-μ / √σ²) - 1
-        
-      #  warn(sum(x))
-      #  info(sqrt.(σ²[1]))
-      #  readline()
-      #    warn(sum(μ[1] ./ sqrt.(σ²[1]))) 
-
-        N = prod(size(w[3], 1,2,3))
-        μ = conv4(w[3], x) .+ w[4]
-        σ² = N .- conv4(w[3].*w[3], x .* x) 
-        μ = pool(μ, mode=1)
-        σ² = pool(σ², mode=1)
-        x = @.  2H(-μ / √σ²) - 1
-
-        x = mat(x)
-        x = dropout(x, pdrop)
-
-        N = size(w[5], 2)
-        μ = w[5]*x .+ w[6]
-        σ² = N/scale .- (w[5] .* w[5]) * (x.*x)
-        x = @.  2H(-μ / √σ²) - 1
-        x = dropout(x, pdrop)
-        
-        N = size(w[7], 2)
-        μ = w[7]*x .+ w[9]
-        σ² = N/scale .- (w[7] .* w[7]) * (x.*x)
-        return @. μ / √σ²
+    x = reshape(x, 32, 32, 3, length(x)÷(32*32*3))
+ 
+    for idx = 1:length(NET)
+        NET[idx] == 'F' && break
+        if NET[idx] != 'M'
+            μ = conv4(w[i], x; padding=1)
+            σ² = conv4(1 .- w[i] .* w[i], x .* x .+ 0.00000001; padding=1)
+            if NET[idx+1] == 'M'
+              μ = pool(μ, mode=1)
+        			σ² = pool(σ², mode=1)
+            end
+            #x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
+            x = @.  2H(-μ / √σ²) - 1
+            i += 3
+        end
     end
+    x = mat(x)
+    for f in NET[end]
+        μ = w[i] * x
+        σ² = (1 .- w[i] .* w[i]) * (x .* x)
+        #x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
+        x = @.  2H(-μ / √σ²) - 1
+        i += 3    
+    end
+
+    μ = w[i] * x
+    σ² = (1 .- w[i] .* w[i]) * (x .* x)
+    x = @.  2H(-μ / √σ²) - 1
+    #x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
+    i+= 3
+    
+    return x
 end
 
 

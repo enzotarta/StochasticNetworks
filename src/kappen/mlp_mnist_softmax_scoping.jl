@@ -4,22 +4,6 @@ using Knet
 const F = Float32
 include("../../utility/common.jl")
 
-T1(mu, sigma) = @. (mu-1)/(sigma*sqrt(2))
-T2(mu, sigma) = @. (mu+1)/(sigma*sqrt(2))
-T3(mu, sigma) = @. (-mu+1)/(sigma*sqrt(2))
-
-function mustar(mu, sigma)
-	a = T1(mu, sigma)
-	b = T2(mu, sigma)
-	c = T3(mu, sigma)
-	q = @. (-e^(-a*a)+e^(-b*b))*sqrt(2/pi)*sigma
-	q = @. q + mu*erf(c)
-	q = @. q + erf(a)
-	q = @. q + (1-mu)*erf(b)
-	@. 0.5*(q)
-end
-
-
 function predict(w, x; clip=false, pdrop=0.0, input_do = 0.0, γ = 0.0)
     x = mat(x)
     scale = w[1] isa Rec ? 1-pdrop : 1
@@ -32,24 +16,24 @@ function predict(w, x; clip=false, pdrop=0.0, input_do = 0.0, γ = 0.0)
     else
         x = dropout(x, input_do; training = w[1] isa Rec ? true :false)
         for i=1:2:length(w)-2
-            N = size(w[i], 2)
-            μ = w[i]*x .+ w[i+1]
+        	N = size(w[i], 2)
+        	μ = w[i]*x .+ w[i+1]
 	    	    σ = i== 1 ? (1 .- w[1].*w[1]) * (x.*x) : 
 	    			    (N .- (w[i].*w[i]) * (x.*x))
-          	x = @. 2H(γ*-μ/ √σ) - 1
+		x = @. 2H(γ * -μ/ √σ) - 1
             x = dropout(x, pdrop)
         end
         N = size(w[end-1], 2)
         μ = w[end-1]*x .+ w[end]
 				σ = (N .- (w[end-1] .* w[end-1]) * (x .* x))
-        x = @. γ*μ/sqrt(σ)
+        x = @. γ * -μ/sqrt(σ)
         return x
     end
 end
 
  function loss(w, x, y, bmom; pdrop=0.0, input_do = 0.0, γ = 0.0, rho = 0.0, eps = 0.0000001)
      ŷ = predict(w, x; pdrop=pdrop, input_do = input_do, γ = γ)
-     ŷ  = H.(-ŷ )
+     ŷ  = H.(ŷ)
      nm = onehot!(similar(ŷ), y)
      ŷ = ŷ ./(1 .+ eps .- ŷ)
      ŷ -= rho .* ŷ .* nm
@@ -87,6 +71,8 @@ function main(xtrn, ytrn, xtst, ytst;
         infotime = 1,  # report every `infotime` epochs
         atype = gpu() >= 0 ? KnetArray{F} : Array{F},
         verb = 2,
+	γ_start = 10.0,
+	γ_scope = -0.1
         pdrop = 0.5,
         input_do = 0.0
         )
@@ -100,14 +86,14 @@ function main(xtrn, ytrn, xtst, ytst;
     
     acctrn = 0
     acctst = 0
-best_acctst = 0
-γ = 1.0
+    best_acctst = 0
+    γ = γ_start
     report(epoch) = begin
             dtrn = minibatch(xtrn, ytrn, batchsize; xtype=atype)
             dtst = minibatch(xtst, ytst, batchsize; xtype=atype)
             acctrn = accuracy(w, dtrn, (w,x)->predict(w,x,clip=true, γ = γ))
-            acctst = accuracy(w, dtst, (w,x)->predict(w,x,clip=true, γ = γ)) 
-best_acctst = best_acctst < acctst ? acctst : best_acctst
+	    acctst = accuracy(w, dtst, (w,x)->predict(w,x,clip=true, γ = γ)) 
+	    best_acctst = best_acctst < acctst ? acctst : best_acctst
             println((:epoch, epoch,
                 :trn, accuracy(w, dtrn, (w,x)->predict(w,x, γ = γ)) |> percentage,
                 :trn_clip, acctrn  |> percentage,
@@ -143,12 +129,12 @@ best_acctst = best_acctst < acctst ? acctst : best_acctst
             #end
             update!(w, dw, opt)
             for i=1:2:length(w)
-                w[i] = clip(w[i], 1e-2)
+                w[i] = clip(w[i], 1e-4)
             end
         end
         (epoch % infotime == 0) && (report(epoch); toc(); tic())
-				γ -= .001
-				opt = [Adam(lr=lr*γ) for _=1:length(w)]
+	γ += γ_scope
+	opt = [Adam(lr=lr) for _=1:length(w)]
     end; toq()
     println("# FINAL RESULT acccuracy: train=$acctrn test=$acctst")
     return w
