@@ -9,16 +9,17 @@ NET = [128,128, 'M', 256, 256, 'M',
   512, 512,  'M', 'F', [1024, 1024]]
 
 
-function predict(w, x, bmom; pdrop=0.5)
+function predict(w, x, bmom; pdrop=0.5, input_do = 0.0)
     i = 1
     x = reshape(x, 32, 32, 3, length(x)÷(32*32*3))
-
+#	x = dropout(x, input_do; training = true)
+		#x = dropout(x, input_do)#w[1] isa Rec ? true : false)
     for idx = 1:length(NET)
         NET[idx] == 'F' && break
         if NET[idx] != 'M'
             x = conv4(w[i], x; padding=1)
             if NET[idx+1] == 'M'
-                x = pool(x)
+                x = pool(x, mode=1)
             end
             x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
             x = fSign.(x)
@@ -40,7 +41,7 @@ function predict(w, x, bmom; pdrop=0.5)
     return x
 end
 
-loss(w, x, y, bmom; pdrop=0.5) = nll(predict(w, x, bmom; pdrop=pdrop), y)
+loss(w, x, y, bmom; pdrop=0.0, input_do = 0.0) = nll(predict(w, dropout(x, input_do; training=true), bmom; pdrop=pdrop, input_do = input_do), y)
 
 function build_net(; atype=Array{F})
     w = []
@@ -78,11 +79,15 @@ function main(xtrn, ytrn, xtst, ytst;
         atype = gpu() >= 0 ? KnetArray{F} : Array{F},
 				reportname = "",
         pdrop = 0.5,  #dropout probability
+				input_do = 0.0,
         verb = 2
         )
 
     info("using ", atype)
     seed > 0 && srand(seed)
+
+xtrn = 2xtrn - 1
+xtst = 2xtst - 1
 
     w = build_net(atype=atype)
     opt = [Adam(lr=lr) for _=1:length(w)]
@@ -122,14 +127,15 @@ function main(xtrn, ytrn, xtst, ytst;
         end
 
 
-    report(0); tic()
+#    report(0); 
+tic()
     @time for epoch=1:epochs
         for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=true, xtype=atype)
             bw = binarize(w)
-            dw = grad(loss)(bw, x, y, bmom; pdrop=pdrop)
+            dw = grad(loss)(bw, x, y, bmom; pdrop=pdrop, input_do = input_do)
             update!(w, dw, opt)
             for i=1:3:length(w)
-              w[i] = clip(w[i])
+              w[i] = clip(w[i], 1e-2)
             end
         end
         (epoch % infotime == 0) && (report(epoch); toc(); tic())

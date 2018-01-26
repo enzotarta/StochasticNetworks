@@ -6,7 +6,7 @@ include("../../utility/common.jl")
 
 # all cnn are "same" 3x3  
 NET = [128,128, 'M', 256, 256, 'M',
-  512, 512,  'M', 'F', [1024]]
+  512, 512,  'M', 'F', [1024, 1024]]
 
 
 function predict(w, x, bmom; pdrop=0.5)
