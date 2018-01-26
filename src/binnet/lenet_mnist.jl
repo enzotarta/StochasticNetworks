@@ -10,13 +10,13 @@ function predict(w, x, bmom)
     x = reshape(x, 28, 28, 1, length(x)÷(28*28))
     
     x = conv4(w[i], x; padding=0)
-    x = pool(x)
+    x = pool(x; mode=1)
     x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
     x = fSign.(x)
     i += 3
     
     x = conv4(w[i], x; padding=0)
-    x = pool(x)
+    x = pool(x; mode=1)
     x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
     x = fSign.(x)
     i += 3

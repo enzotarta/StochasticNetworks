@@ -121,7 +121,7 @@ report(epoch) = begin
             dw = grad(loss)(w, x, y, bmom; pdrop=pdrop)
             update!(w, dw, opt)
             for i=1:3:length(w)
-                w[i] = clip(w[i])
+                w[i] = clip(w[i], 1e-2)
             end
         end
         (epoch % infotime == 0) && (report(epoch); toc(); tic())

@@ -21,13 +21,15 @@ function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0)
             μ = w[i]*x .+ w[i+1]
             σ = i== 1 ? (1 .- w[1].*w[1]) * (x.*x) : 
                         N/scale .- (w[i].*w[i]) * (x.*x)
-            x = @.  2H(-μ / √σ) - 1
+            x = @.  2H(-μ / ( √σ)) - 1
             x = dropout(x, pdrop)
         end
         N = size(w[end-2], 2)
         μ = w[end-2]*x .+ w[end]
         σ = N/scale .- (w[end-2] .* w[end-2]) * (x .* x)
-        return @. μ / √σ
+#x = μ .+ sqrt.(σ) .* randn!(similar(μ))
+#        x = batchnorm(w[end-1:end], x, bmom)
+        return μ./ (sqrt.(σ))#x#μ .+ sqrt.(σ) .* randn!(similar(μ))
     end
 end
 
@@ -38,6 +40,8 @@ function loss(w, x, y, bmom; pdrop=0.5, input_do = 0.0)
     y = onehot!(similar(ŷ), y)
     return losslogH((2 .* y .- 1) .* ŷ)
 end
+
+xavier2(a,b) = 2rand(a, b).-1
 
 function build_net(; atype=Array{F})
     w = [
@@ -104,11 +108,14 @@ function main(xtrn, ytrn, xtst, ytst;
             end
 
             if verb > 1
-                for i=1:2:length(w)-2
+                for i=1:2:length(w)-4
                     n, m = length(w[i]), length(w[i+1])
                     print(" layer $(i÷2+1): W-norm $(round(vecnorm(w[i])/√n, 3))")
                     print(" Θ1-norm $(round(vecnorm(w[i+1])/√m, 3))\n")
                 end
+                n, m = length(w[end-2]), length(w[end])
+                print(" layer OUT: W-norm $(round(vecnorm(w[end-2])/√n, 3))")
+                    print(" Θ1-norm $(round(vecnorm(w[end])/√m, 3))\n")
             end    
         end
 
@@ -116,13 +123,15 @@ function main(xtrn, ytrn, xtst, ytst;
     @time for epoch=1:epochs
         for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=true, xtype=atype)
             dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do)
-            for i=1:2:length(w)-2
+            for i=1:2:length(w)-3
                 dw[i] = (1 - w[i] .* w[i]) .* dw[i]
             end
             update!(w, dw, opt)
-            for i=1:2:length(w)-2
-                w[i] = clip(w[i], 1e-2)
+            for i=1:2:length(w)-3
+                w[i] = clip(w[i], 0.1)
+#w[i+1] = clip(w[i+1], 1.0)
             end
+
         end
         (epoch % infotime == 0) && (report(epoch); toc(); tic())
         # acctrn == 100 && break

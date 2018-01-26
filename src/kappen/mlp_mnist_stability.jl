@@ -4,6 +4,32 @@ using SpecialFunctions
 const F = Float32
 include("../../utility/common.jl")
 
+function inoutmag(w, x)
+    x = mat(x)
+j = 1
+		x_avg = zeros(length(w)+1)
+     x_avg[j] = mean(sum(x.*x,1)/(size(x, 1)))
+    j+=1
+
+        for i=1:2:length(w)-3
+            N = size(w[i], 2)
+            μ = w[i]*x .+ w[i+1]
+            σ = i== 1 ? (1 .- w[1].*w[1]) * (x.*x) :
+                        N .- (w[i].*w[i]) * (x.*x)
+            x = @.  2H(-μ / √σ) - 1
+                 x_avg[j] = mean(sum(x.*x,1)/(size(x, 1)))
+    j+=1
+        end
+        N = size(w[end-1], 2)
+        μ = w[end-1]*x .+ w[end]
+        σ = N .- (w[end-1] .* w[end-1]) * (x .* x)
+        x = @. 2H(-μ/√σ)-1
+     x_avg[i] = mean(sum(x.*x,1)/(size(x, 1)))
+    i+=1
+        return x_avg
+end
+
+
 function predict(w, x; clip=false, pdrop=0.5, input_do = 0.0)
     x = mat(x)
     scale = w[1] isa Rec ? 1-pdrop : 1
@@ -31,8 +57,8 @@ function predict(w, x; clip=false, pdrop=0.5, input_do = 0.0)
     end
 end
 
-function loss(w, x, y, bmom; clip = false, pdrop=0.0, input_do = 0.0, ρ=0.5, ϵ=0.000001)
-  ŷ = predict(w, x, bmom; clip=clip, pdrop=pdrop, input_do = input_do)
+function loss(w, x, y; clip = false, pdrop=0.0, input_do = 0.0, ρ=0.5, ϵ=0.000001)
+  ŷ = predict(w, x; clip=clip, pdrop=pdrop, input_do = input_do)
   ŷ= H.(-ŷ)
   nm = onehot!(similar(ŷ), y)
   ŷ = ŷ ./(1.0 + ϵ - ŷ)
@@ -48,16 +74,16 @@ end
 
 function build_net(; atype=Array{F})
     w = [
-      xavier(801, 28*28),
+      2rand(801, 28*28)-1,
       zeros(801, 1),
 
-      xavier(801, 801),
+      2rand(801, 801)-1,
       zeros(801, 1),
 
-      xavier(801, 801),
+      2rand(801, 801)-1,
       zeros(801, 1),
 
-      xavier(10, 801),
+      2rand(10, 801)-1,
       zeros(10, 1),
     ]
     return map(a->convert(atype,a), w)
@@ -98,13 +124,26 @@ function main(xtrn, ytrn, xtst, ytst;
                 :tst, accuracy(w, dtst, (w,x)->predict(w,x)) |> percentage,
                 :tst_clip, acctst  |> percentage
             ))
+          counter = 0
+          stat = zeros(length(w)+1)
+          for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=false, xtype=atype)
+            stat .+= inoutmag(w, x)
+            counter +=1
+          end
+          for i=1:4
+            info("L",i-1,":", stat[i]/counter)
+          end
             if reportname != ""
                 f = open(reportname, "a")
                 print(f, epoch, "\t", acctrn, "\t", acctst, "\t")
                 for lay = 1:2:length(w)
                     print(f, vecnorm(w[lay])/√length(w[lay]), "\t")
                 end
-                println(f)
+
+                    for i = 1:4
+                      print(f, stat[i]/counter, "\t")
+                    end             
+   println(f)
                 close(f)
             end
 
@@ -119,7 +158,7 @@ function main(xtrn, ytrn, xtst, ytst;
 
     report(0); tic()
     @time for epoch=1:epochs
-        for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=true, xtype=atype)
+        for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=false, xtype=atype)
             dw = grad(loss)(w, x, y; pdrop=pdrop, input_do = input_do, ρ = ρ)
             for i=1:2:length(w)
                 dw[i] = (1 - w[i] .* w[i]) .* dw[i]
