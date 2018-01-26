@@ -7,26 +7,36 @@ include("../../utility/common.jl")
 function predict(w, x, bmom; pdrop=0.5)
     i = 1
     x = mat(x)
-    
-    x = w[i]*x
+		μ = w[i] * x
+    σ² = (1 .- w[i] .* w[i]) * (x .* x)
+    x = μ .+ randn!(similar(μ)) .* sqrt.(σ²)
     x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
     x = fSign.(x)
     x = dropout(x, pdrop)
     i += 3
     
-    x = w[i]*x
+    
+		μ = w[i] * x
+    σ² = (1 .- w[i] .* w[i]) * (x .* x)
+    x = μ .+ randn!(similar(μ)) .* sqrt.(σ²)
     x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
     x = fSign.(x)
     x = dropout(x, pdrop)
     i += 3
     
-    x = w[i]*x
+    
+		μ = w[i] * x
+    σ² = (1 .- w[i] .* w[i]) * (x .* x)
+    x = μ .+ randn!(similar(μ)) .* sqrt.(σ²)
     x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
     x = fSign.(x)
     #x = dropout(x, pdrop)
     i += 3
     
-    x = w[i]*x
+    
+		μ = w[i] * x
+    σ² = (1 .- w[i] .* w[i]) * (x .* x)
+    x = μ .+ randn!(similar(μ)) .* sqrt.(σ²)
     x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
     i += 3
 
