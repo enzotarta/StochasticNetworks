@@ -17,7 +17,7 @@ function predict(w, x, bmom; pdrop=0.5)
         NET[idx] == 'F' && break
         if NET[idx] != 'M'
             μ = conv4(w[i], x; padding=1)
-            σ² = conv4(1 .- w[i] .* w[i], x .* x; padding=1)
+            σ² = conv4(1 .- w[i] .* w[i], (x .* x) .+ 0.00000001; padding=1)
             x = μ .+ randn!(similar(μ)) .* sqrt.(σ²)
             if NET[idx+1] == 'M'
                 x = pool(x, mode=0)

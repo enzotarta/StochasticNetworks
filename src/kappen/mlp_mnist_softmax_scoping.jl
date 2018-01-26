@@ -4,45 +4,47 @@ using Knet
 const F = Float32
 include("../../utility/common.jl")
 
-function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0)
+function predict(w, x; clip=false, pdrop=0.0, input_do = 0.0, γ = 0.0)
     x = mat(x)
     scale = w[1] isa Rec ? 1-pdrop : 1
-    x = dropout(x, input_do; training= w[1] isa Rec ? true : false)
     if clip
-        for i=1:2:length(w)-3
+        for i=1:2:length(w)-2
             x = sign.(sign.(w[i])*x .+ w[i+1])
         end
-        x =  sign.(w[end-2])*x
-        return x .+ w[end]
+        x =  sign.(w[end-1])*x .+ w[end]
+        return x
     else
-
-        for i=1:2:length(w)-3
-            N = size(w[i], 2)
-            μ = w[i]*x .+ w[i+1]
-            σ = i== 1 ? (1 .- w[1].*w[1]) * (x.*x) : 
-                        N/scale .- (w[i].*w[i]) * (x.*x)
-            x = @.  2H(-μ / ( √σ)) - 1
+        x = dropout(x, input_do; training = w[1] isa Rec ? true :false)
+        for i=1:2:length(w)-2
+        	N = size(w[i], 2)
+        	μ = w[i]*x .+ w[i+1]
+	    	    σ = i== 1 ? (1 .- w[1].*w[1]) * (x.*x) : 
+	    			    (N .- (w[i].*w[i]) * (x.*x))
+		x = @. 2H(γ * -μ/ √σ) - 1
             x = dropout(x, pdrop)
         end
-        N = size(w[end-2], 2)
-        μ = w[end-2]*x .+ w[end]
-        σ = N/scale .- (w[end-2] .* w[end-2]) * (x .* x)
-#x = μ .+ sqrt.(σ) .* randn!(similar(μ))
-#        x = batchnorm(w[end-1:end], x, bmom)
-        return μ./ (sqrt.(σ))#x#μ .+ sqrt.(σ) .* randn!(similar(μ))
+        N = size(w[end-1], 2)
+        μ = w[end-1]*x .+ w[end]
+				σ = (N .- (w[end-1] .* w[end-1]) * (x .* x))
+        x = @. γ * -μ/sqrt(σ)
+        return x
     end
 end
 
-losslogH(y) = -sum(logH.(-y)) / size(y, 2)
+ function loss(w, x, y, bmom; pdrop=0.0, input_do = 0.0, γ = 0.0, rho = 0.0, eps = 0.0000001)
+     ŷ = predict(w, x; pdrop=pdrop, input_do = input_do, γ = γ)
+     ŷ  = H.(ŷ)
+     nm = onehot!(similar(ŷ), y)
+     ŷ = ŷ ./(1 .+ eps .- ŷ)
+     ŷ -= rho .* ŷ .* nm
+     ŷ =ŷ ./ maximum(ŷ ,1)
+     s = _sum_loss(nm .* ŷ) - _sum_loss(ŷ) 
+     return -s
+ end
 
-function loss(w, x, y, bmom; pdrop=0.5, input_do = 0.0)
-    ŷ = predict(w, x, bmom; pdrop=pdrop, input_do = input_do)
-    y = onehot!(similar(ŷ), y)
-    return losslogH((2 .* y .- 1) .* ŷ)
+function _sum_loss(ŷ)
+	sum(log.(sum(ŷ, 1)))
 end
-
-xavier2(a,b) = 2rand(a, b).-1
-
 function build_net(; atype=Array{F})
     w = [
       xavier(801, 28*28),
@@ -55,21 +57,22 @@ function build_net(; atype=Array{F})
       zeros(801, 1),
 
       xavier(10, 801),
-      ones(10, 1),
       zeros(10, 1),
     ]
     return map(a->convert(atype,a), w)
 end
+
 function main(xtrn, ytrn, xtst, ytst;
         seed = -1,
         batchsize = 200,
         lr = 1e-3,
-        lr_decay = 1.0,
         epochs = 200,
         reportname = "",
         infotime = 1,  # report every `infotime` epochs
         atype = gpu() >= 0 ? KnetArray{F} : Array{F},
         verb = 2,
+	γ_start = 10.0,
+	γ_scope = -0.1
         pdrop = 0.5,
         input_do = 0.0
         )
@@ -83,23 +86,23 @@ function main(xtrn, ytrn, xtst, ytst;
     
     acctrn = 0
     acctst = 0
-    
-    
-    
+    best_acctst = 0
+    γ = γ_start
     report(epoch) = begin
-            dtst = minibatch(xtst, ytst, batchsize; xtype=atype)
             dtrn = minibatch(xtrn, ytrn, batchsize; xtype=atype)
-        
-            acctrn = accuracy(w, dtrn, (w,x)->predict(w,x,bmom,clip=true))
-            acctst = accuracy(w, dtst, (w,x)->predict(w,x,bmom,clip=true)) 
+            dtst = minibatch(xtst, ytst, batchsize; xtype=atype)
+            acctrn = accuracy(w, dtrn, (w,x)->predict(w,x,clip=true, γ = γ))
+	    acctst = accuracy(w, dtst, (w,x)->predict(w,x,clip=true, γ = γ)) 
+	    best_acctst = best_acctst < acctst ? acctst : best_acctst
             println((:epoch, epoch,
-                :trn, accuracy(w, dtrn, (w,x)->predict(w,x,bmom)) |> percentage,
+                :trn, accuracy(w, dtrn, (w,x)->predict(w,x, γ = γ)) |> percentage,
                 :trn_clip, acctrn  |> percentage,
-                :tst, accuracy(w, dtst, (w,x)->predict(w,x,bmom)) |> percentage,
+                :tst, accuracy(w, dtst, (w,x)->predict(w,x, γ = γ)) |> percentage,
                 :tst_clip, acctst  |> percentage,
-                :lr, lr
+                :best, best_acctst |> percentage,
+		:γ, γ
             ))
-						if reportname != ""
+            if reportname != ""
                 f = open(reportname, "a")
                 print(f, epoch, "\t", acctrn, "\t", acctst, "\t")
                 for lay = 1:2:length(w)-2
@@ -110,34 +113,28 @@ function main(xtrn, ytrn, xtst, ytst;
             end
 
             if verb > 1
-                for i=1:2:length(w)-4
+                for i=1:2:length(w)
                     n, m = length(w[i]), length(w[i+1])
                     print(" layer $(i÷2+1): W-norm $(round(vecnorm(w[i])/√n, 3))")
                     print(" Θ1-norm $(round(vecnorm(w[i+1])/√m, 3))\n")
                 end
-                n, m = length(w[end-2]), length(w[end])
-                print(" layer OUT: W-norm $(round(vecnorm(w[end-2])/√n, 3))")
-                    print(" Θ1-norm $(round(vecnorm(w[end])/√m, 3))\n")
             end    
         end
-
     report(0); tic()
     @time for epoch=1:epochs
         for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=true, xtype=atype)
-            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do)
-            for i=1:2:length(w)-3
-                dw[i] = (1 - w[i] .* w[i]) .* dw[i]
-            end
+            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do, γ = γ)
+            #for i=1:2:length(w)
+            #    dw[i] = (1 - w[i] .* w[i]) .* dw[i]
+            #end
             update!(w, dw, opt)
-            for i=1:2:length(w)-3
-                w[i] = clip(w[i], 0.1)
-#w[i+1] = clip(w[i+1], 1.0)
+            for i=1:2:length(w)
+                w[i] = clip(w[i], 1e-4)
             end
-
         end
         (epoch % infotime == 0) && (report(epoch); toc(); tic())
-        lr*= lr_decay
-        opt = [Adam(lr=lr) for _=1:length(w)]
+	γ += γ_scope
+	opt = [Adam(lr=lr) for _=1:length(w)]
     end; toq()
     println("# FINAL RESULT acccuracy: train=$acctrn test=$acctst")
     return w

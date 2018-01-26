@@ -1,0 +1,4 @@
+kappen_mlp_logH   MNIST     NO            1e-2  200       0.0       0.2       1     0.9814714285714287  NaN
+kappen_mlp_logH   MNIST     NO            1e-2  1000      0.0       0.2       1     0.9837142857142858  NaN
+kappen_mlp_softmaxMNIST     NO            1e-2  200       0.0       0.2       1     0.9836095238095242  NaN
+kappen_mlp_softmaxMNIST     NO            1e-2  1000      0.0       0.2       1     0.983809523809524   NaN

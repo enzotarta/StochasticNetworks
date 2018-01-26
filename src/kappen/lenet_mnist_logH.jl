@@ -53,6 +53,7 @@ function predict(w, x; clip=false, pdrop=0.5, input_do = 0.0)
         return sign.(w[i]) * x .+ w[i+1]
     else 
         scale = w[1] isa Rec ? 1-pdrop : 1
+<<<<<<< HEAD
         μ = conv4(w[1], x; padding = 0) .+ w[2]
         σ² = conv4(1 .- w[1] .* w[1], x .* x; padding = 0)
 				σ² = lowbound.(σ², 0.001)
@@ -65,6 +66,19 @@ function predict(w, x; clip=false, pdrop=0.5, input_do = 0.0)
 				end
 				x = @. μ/√σ²
 				x = 2H.(-x) -1
+=======
+     #warn(sum(x[1]))
+        μ = conv4(w[1], x; padding = 0) .+ w[2]
+        σ² = conv4(1 .- w[1] .* w[1], (x .* x).+ 0.00000001; padding = 0)
+        μ = pool(μ, mode=1)
+        σ² = pool(σ², mode=1)
+        x = @.  2H(-μ / √σ²) - 1
+        
+      #  warn(sum(x))
+      #  info(sqrt.(σ²[1]))
+      #  readline()
+      #    warn(sum(μ[1] ./ sqrt.(σ²[1]))) 
+>>>>>>> 868073ab15d98d7ef48439bd6e1844bd2bafe31d
 
         N = prod(size(w[3], 1,2,3))
         μ = conv4(w[3], x) .+ w[4]
