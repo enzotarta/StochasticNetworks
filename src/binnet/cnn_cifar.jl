@@ -9,17 +9,16 @@ NET = [128,128, 'M', 256, 256, 'M',
   512, 512,  'M', 'F', [1024, 1024]]
 
 
-function predict(w, x, bmom; pdrop=0.5, input_do = 0.0)
+function predict(w, x, bmom; pdrop=0.5)
     i = 1
     x = reshape(x, 32, 32, 3, length(x)÷(32*32*3))
-#	x = dropout(x, input_do; training = true)
-		#x = dropout(x, input_do)#w[1] isa Rec ? true : false)
+
     for idx = 1:length(NET)
         NET[idx] == 'F' && break
         if NET[idx] != 'M'
             x = conv4(w[i], x; padding=1)
             if NET[idx+1] == 'M'
-                x = pool(x, mode=1)
+                x = pool(x; mode=1)
             end
             x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
             x = fSign.(x)
@@ -41,7 +40,7 @@ function predict(w, x, bmom; pdrop=0.5, input_do = 0.0)
     return x
 end
 
-loss(w, x, y, bmom; pdrop=0.0, input_do = 0.0) = nll(predict(w, dropout(x, input_do; training=true), bmom; pdrop=pdrop, input_do = input_do), y)
+loss(w, x, y, bmom; pdrop=0.0, input_do = 0.0) = nll(predict(w, dropout(x, input_do; training=true), bmom; pdrop=pdrop), y)
 
 function build_net(; atype=Array{F})
     w = []

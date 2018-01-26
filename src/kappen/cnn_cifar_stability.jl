@@ -8,7 +8,6 @@ include("../../utility/common.jl")
 NET = [128,128, 'M', 256, 256, 'M',
   512, 512,  'M', 'F', [1024, 1024]]
 
-#sclamp(x) = (x.>1)*1 + (x.<-1).*(-1) + (abs.(x).<1).*x
 lowbound(x, a) = a*(x<a) + (x>=a)*x
 
 function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0)
@@ -59,7 +58,7 @@ function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0)
     end
     x = mat(x)
     for f in NET[end]
-			#x = dropout(x, pdrop)
+			  x = dropout(x, pdrop)
 				N = size(w[i], 2)
         μ = w[i] * x .+ w[i+2]
         σ² = N .- (w[i] .* w[i]) * (x .* x)
@@ -82,9 +81,9 @@ function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0)
 end
 
 
-losslogH(y) = -sum(logH.(-y)) / size(y, 2)
+#=losslogH(y) = -sum(logH.(-y)) / size(y, 2)
 
-#=function loss(w, x, y, bmom; pdrop=0.5, input_do = 0.0)
+function loss(w, x, y, bmom; pdrop=0.5, input_do = 0.0)
     ŷ = predict(w, x, bmom; pdrop=pdrop, input_do = input_do)
     y = onehot!(similar(ŷ), y)
     return losslogH((2 .* y .- 1) .* ŷ)
@@ -196,41 +195,18 @@ xtst = 2xtst - 1
     @time for epoch=1:epochs
         # epoch == 10 && setlr!(opt, lr/=10)
         for (x, y) in minibatch(xtrn, ytrn, batchsize, shuffle=true, xtype=atype)
-            #info(loss(w, x, y, bmom; pdrop=pdrop, input_do = input_do))
- 
-            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do)
-#info(loss(w, x, y, bmom; pdrop=pdrop, input_do = input_do))   
-         for i=1:3:length(w)-2
-               dw[i] = (1 - w[i] .* w[i]) .* dw[i]
-            end
-            update!(w, dw, opt)
-            for i=1:3:length(w)-2
-            	w[i] = clip(w[i], 1e-2)
-							#w[i] = w[i] + 0.001*(mean(w[i])-w[i])	
-            end
-#ŷ = convert(Array, predict(w, x, bmom))
-#warn((sum((maximum(ŷ, 1).==ŷ).* convert(Array, onehot!(similar(ŷ), y)))/length(y)))
-=======
-    report(0); tic()
-    @time for epoch=1:epochs
-        # epoch == 10 && setlr!(opt, lr/=10)
-        for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=true, xtype=atype)
-            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do)
-            for i=1:2:length(w)-2
-                dw[i] = (1 - w[i] .* w[i]) .* dw[i]
-            end
-            update!(w, dw, opt)
-            for i=1:2:length(w)-2
-                w[i] = clip(w[i], 1e-2)
-            end
->>>>>>> 868073ab15d98d7ef48439bd6e1844bd2bafe31d
+ 					dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do) 
+					for i=1:3:length(w)-2
+						dw[i] = (1 - w[i] .* w[i]) .* dw[i]
+					end
+					update!(w, dw, opt)
+					for i=1:3:length(w)-2
+						w[i] = clip(w[i], 1e-2)
+					end
         end
         (epoch % infotime == 0) && (report(epoch); toc(); tic())
         # acctrn == 100 && break
     end; toq()
-    println("# FINAL RESULT acccuracy: train=$acctrn test=$acctst" , )
-<<<<<<< HEAD
-=======
+    println("# FINAL RESULT acccuracy: train=$acctrn test=$acctst")
     return w
->>>>>>> 868073ab15d98d7ef48439bd6e1844bd2bafe31d
 end
