@@ -26,7 +26,7 @@ function predict(w, x, bmom; pdrop=0.5)
     i += 3
     
     x = mat(x)
-    
+    x = dropout(x, pdrop)
     μ = w[i] * x
     σ² = (1 .- w[i] .* w[i]) * (x .* x)
     x = μ .+ randn!(similar(μ)) .* sqrt.(σ²)
@@ -43,7 +43,7 @@ function predict(w, x, bmom; pdrop=0.5)
     return x
 end
 
-loss(w, x, y, bmom; pdrop=0.5) = nll(predict(w, x, bmom; pdrop=0.5), y)
+loss(w, x, y, bmom; pdrop=0.5, input_do = 0.0) = nll(predict(w, dropout(x, input_do; training=true), bmom; pdrop=0.5), y)
 
 binarize(w) = [i%3==1 ? sign.(w[i]) : w[i] for i=1:length(w)]
 
@@ -128,6 +128,7 @@ function main(xtrn, ytrn, xtst, ytst;
         reportname = "",
         atype = gpu() >= 0 ? KnetArray{F} : Array{F},
         verb = 2,
+				input_do = 0.0,
         pdrop = 0.5
         )
 
@@ -190,7 +191,7 @@ function main(xtrn, ytrn, xtst, ytst;
     report(0); tic()
     @time for epoch=1:epochs
         for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=false, xtype=atype)
-            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop)
+            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do)
             update!(w, dw, opt)
             for i=1:3:length(w)
                 w[i] = clip(w[i], 1e-2)

@@ -1,9 +1,12 @@
 using SpecialFunctions
 using AutoGrad
 using Knet
+using JLD
 import AutoGrad: Broadcasted, getval, Rec
 
 const F = Float32
+
+
 
 H(x) = erfc(x / F(√2)) / 2
 GH(x) = 2 / erfcx(x/F(√2)) / F(√(2π))
@@ -150,4 +153,12 @@ function batchnorm(w, x, bmom::BatchMoments; ϵ=Float32(1e-5))
         μ, σ = getmoments(bmom)
     end
     return @. w[1] * (x - μ) / σ + w[2]
+end
+
+###save network
+function savenet(w, path, name)
+	w_cpu = [convert(Array, w[i]) for i=1:length(w)]
+	jldopen(path*name, "w") do file
+		write(file, "weights", w_cpu)
+	end
 end

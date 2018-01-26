@@ -8,12 +8,13 @@ include("../../utility/common.jl")
 NET = [128,128, 'M', 256, 256, 'M',
   512, 512,  'M', 'F', [1024, 1024]]
 
+#sclamp(x) = (x.>1)*1 + (x.<-1).*(-1) + (abs.(x).<1).*x
 lowbound(x, a) = a*(x<a) + (x>=a)*x
 
 function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0)
 	i = 1
 	x = reshape(x, 32,32,3, length(x)÷(32*32*3))
-	#x = dropout(x, input_do; training= w[1] isa Rec ? true : false)
+	x = dropout(x, input_do; training= w[1] isa Rec ? true : false)
 	if clip
 		for idx = 1:length(NET)
     	NET[idx] == 'F' && break
@@ -58,7 +59,7 @@ function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0)
     end
     x = mat(x)
     for f in NET[end]
-			  x = dropout(x, pdrop)
+			#x = dropout(x, pdrop)
 				N = size(w[i], 2)
         μ = w[i] * x .+ w[i+2]
         σ² = N .- (w[i] .* w[i]) * (x .* x)
@@ -76,32 +77,32 @@ function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0)
     x = @. μ / √(σ²)
     #x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
     i+= 3
-    return H.(-x)
+    return x
 	end
 end
 
 
-#=losslogH(y) = -sum(logH.(-y)) / size(y, 2)
+losslogH(y) = -sum(logH.(-y)) / size(y, 2)
 
 function loss(w, x, y, bmom; pdrop=0.5, input_do = 0.0)
     ŷ = predict(w, x, bmom; pdrop=pdrop, input_do = input_do)
     y = onehot!(similar(ŷ), y)
     return losslogH((2 .* y .- 1) .* ŷ)
-end=#
+end
 
-function loss(w, x, y, bmom; clip = false, pdrop=0.0, input_do = 0.0, ρ=0.5, ϵ=0.000001, λ=0.0)
-  ŷ = predict(w, dropout(x, input_do; training=true), bmom; clip=clip, pdrop=pdrop, input_do = input_do)
+#=function loss(w, x, y, bmom; clip = false, pdrop=0.0, input_do = 0.0, ρ=0.5, ϵ=0.000001)
+  ŷ = predict(w, x, bmom; clip=clip, pdrop=pdrop, input_do = input_do)
   nm = onehot!(similar(ŷ), y)
   ŷ = ŷ ./(1.0 + ϵ - ŷ)
   ŷ -= ρ .* ŷ .* nm
 	ŷ = ŷ ./ maximum(ŷ, 1)
-  s = _sum_loss(nm .* ŷ) - _sum_loss(ŷ) + λ*sum(sum(1-w[i].*w[i])/length(w[i]) for i=1:3:length(w))
+  s = _sum_loss(nm .* ŷ) - _sum_loss(ŷ)
   return -s
 end
 
 function _sum_loss(ŷ)
   sum(log.(sum(ŷ, 1)))
-end
+end=#
 
 #loss(w, x, y, bmom; input_do = 0.2, pdrop = 0.0) = nll(predict(w, x, bmom), y)
 
@@ -140,7 +141,6 @@ function main(xtrn, ytrn, xtst, ytst;
         atype = gpu() >= 0 ? KnetArray{F} : Array{F},
         verb = 2,
         pdrop = 0.5,
-				λ = 0.0,
         input_do = 0.0
         )
 xtrn = 2xtrn - 1
@@ -159,10 +159,10 @@ xtst = 2xtst - 1
     
     acctrn = 0
     acctst = 0
-    dtrn = minibatch(xtrn, ytrn, batchsize; xtype=atype)
-    dtst = minibatch(xtst, ytst, batchsize; xtype=atype)
 
     report(epoch) = begin
+            dtrn = minibatch(xtrn, ytrn, batchsize; xtype=atype)
+            dtst = minibatch(xtst, ytst, batchsize; xtype=atype)
             acctrn = accuracy(w, dtrn, (w,x)->predict(w,x, bmom, clip=true))
             acctst = accuracy(w, dtst, (w,x)->predict(w,x, bmom, clip=true)) 
             println((:epoch, epoch,
@@ -182,7 +182,7 @@ xtst = 2xtst - 1
                 end
             end
 
-            if verb > 1
+            if verb > 1D
                 for i=1:3:length(w)-2
                     n, m, l = length(w[i]), length(w[i+1]), length(w[i+2])
                     print(" layer $(i÷3+1): W-norm $(round(vecnorm(w[i])/√n, 3))\n")
@@ -196,14 +196,18 @@ xtst = 2xtst - 1
     @time for epoch=1:epochs
         # epoch == 10 && setlr!(opt, lr/=10)
         for (x, y) in minibatch(xtrn, ytrn, batchsize, shuffle=true, xtype=atype)
- 					dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do, λ = λ) 
-					for i=1:3:length(w)-2
-						dw[i] = (1 - w[i] .* w[i]) .* dw[i]
-					end
-					update!(w, dw, opt)
-					for i=1:3:length(w)-2
-						w[i] = clip(w[i], 1e-2)
-					end
+            #info(loss(w, x, y, bmom; pdrop=pdrop, input_do = input_do))
+ 
+            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do)
+#info(loss(w, x, y, bmom; pdrop=pdrop, input_do = input_do))   
+         for i=1:3:length(w)-2
+               dw[i] = (1 - w[i] .* w[i]) .* dw[i]
+            end
+            update!(w, dw, opt)
+            for i=1:3:length(w)-2
+            	w[i] = clip(w[i], 1e-2)
+							#w[i] = w[i] + 0.001*(mean(w[i])-w[i])	
+            end
         end
         (epoch % infotime == 0) && (report(epoch); toc(); tic())
         # acctrn == 100 && break

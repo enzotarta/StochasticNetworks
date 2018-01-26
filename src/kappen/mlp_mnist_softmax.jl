@@ -33,7 +33,7 @@ function predict(w, x, bmom; clip=false, pdrop=0.5, input_do = 0.0, out_bn = fal
         if out_bn
         	x = batchnorm(w[end-1:end], x, bmom)
         end
-        return x
+        return H(-x)
     end
 end
 
