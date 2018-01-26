@@ -12,7 +12,7 @@ function predict(w, x, bmom; pdrop=0.5)
     μ = conv4(w[i], x; padding=0)
     σ² = conv4(1 .- w[i] .* w[i], x .* x; padding=0)
     x = μ .+ randn!(similar(μ)) .* sqrt.(σ²)
-    x = pool(x)
+    x = pool(x; mode = 1)
     x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
     x = fSign.(x)
     i += 3
@@ -20,7 +20,7 @@ function predict(w, x, bmom; pdrop=0.5)
     μ = conv4(w[i], x, padding=0)
     σ² = conv4(1 .- w[i] .* w[i], x .* x, padding=0)
     x = μ .+ randn!(similar(μ)) .* sqrt.(σ²)
-    x = pool(x)
+    x = pool(x; mode=1)
     x = batchnorm(w[i+1:i+2], x, bmom[i÷3+1])
     x = fSign.(x)
     i += 3
@@ -43,7 +43,7 @@ function predict(w, x, bmom; pdrop=0.5)
     return x
 end
 
-loss(w, x, y, bmom; pdrop=0.5, input_do = 0.0) = nll(predict(w, dropout(x, input_do; training=true), bmom; pdrop=0.5), y)
+loss(w, x, y, bmom; pdrop=0.5, input_do = 0.0) = nll(predict(w, dropout(x, input_do; training=true), bmom; pdrop=0.5), y) + sum(sum(1-w[i].*w[i])/length(w[i]) for i=1:3:length(w))/(length(w)÷3)
 
 binarize(w) = [i%3==1 ? sign.(w[i]) : w[i] for i=1:length(w)]
 
