@@ -95,7 +95,7 @@ function loss(w, x, y, bmom; clip = false, pdrop=0.0, input_do = 0.0, ρ=0.5, ϵ
   ŷ = ŷ ./(1.0 + ϵ - ŷ)
   ŷ -= ρ .* ŷ .* nm
 	ŷ = ŷ ./ maximum(ŷ, 1)
-  s = _sum_loss(nm .* ŷ) - _sum_loss(ŷ) + λ*sum(sum(1-w[i].*w[i])/length(w[i]) for i=1:3:length(w))
+  s = _sum_loss(nm .* ŷ) - _sum_loss(ŷ) + λ*sum(sum(1-w[i].*w[i])/length(w[i]) for i=1:3:length(w))/(length(w)÷3)
   return -s
 end
 
