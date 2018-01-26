@@ -33,32 +33,32 @@ function predict(w, x, bmom; pdrop=0.5)
     return x
 end
 
-loss(w, x, y, bmom; pdrop=0.5, input_do = 0.0) = nll(predict(w, dropout(x, input_do; training = true), bmom; pdrop=0.5), y) 
+loss(w, x, y, bmom; pdrop=0.5, input_do = 0.0, λ=0.0) = nll(predict(w, dropout(x, input_do; training = true), bmom; pdrop=0.5), y) + λ*sum(sum(1-w[i].*w[i])/length(w[i]) for i=1:3:length(w))/(length(w)÷3)
 
 binarize(w) = [i%3==1 ? sign.(w[i]) : w[i] for i=1:length(w)]
 
 function build_net(; atype=Array{F})
     w = [
-      xavier(800, 28*28),
+      2rand(800, 28*28)-1,
       ones(800, 1),
       zeros(800, 1),
 
-      xavier(800, 800),
+      2rand(800, 800)-1,
 	  ones(800, 1),
       zeros(800, 1),
 
-      xavier(800, 800),
+      2rand(800, 800)-1,
 	  ones(800, 1),
       zeros(800, 1),
 
-      xavier(10, 800),
+      2rand(10, 800)-1,
 	  ones(10, 1),
       zeros(10, 1),
     ]
     return map(a->convert(atype,a), w)
 end
 
-loss(w, x, y, bmom; pdrop=0.5) = nll(predict(w, x, bmom; pdrop=pdrop), y)
+#loss(w, x, y, bmom; pdrop=0.5) = nll(predict(w, x, bmom; pdrop=pdrop), y)
 
 function main(xtrn, ytrn, xtst, ytst;
     seed = -1,
@@ -70,6 +70,7 @@ function main(xtrn, ytrn, xtst, ytst;
     atype = gpu() >= 0 ? KnetArray{F} : Array{F},
     verb = 2,
 		input_do = 0.0,
+		λ=0.0,
     pdrop = 0.5
     )
 
@@ -119,7 +120,7 @@ report(epoch) = begin
     report(0); tic()
     @time for epoch=1:epochs
         for (x, y) in  minibatch(xtrn, ytrn, batchsize, shuffle=true, xtype=atype)
-            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do)
+            dw = grad(loss)(w, x, y, bmom; pdrop=pdrop, input_do = input_do, λ=λ)
             update!(w, dw, opt)
             for i=1:3:length(w)
                 w[i] = clip(w[i], 1e-2)
